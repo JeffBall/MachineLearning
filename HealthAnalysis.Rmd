@@ -1,0 +1,112 @@
+---
+title: "Machine Learning Project for Weight Lifting Exercise"
+author: "Jeff Ball"
+date: "November 19, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+From the Coursera site, "One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it."  A training dataset with accelerometers in four locations (belt, forearm, arm, and dumbell) and 6 participants measured how well the exercise was executed.  The classification of the exercise (if they did it well or not) is found in a variable called "classe."
+
+The purpose of this project is to use the dataset to create a model that will successfully predict how well an exercise was performed based on the other observations.
+
+## Exploratory Analysis
+
+The training dataset has 19,622 observations of 160 variables.  Because of this, my first objective was to get the dataset smaller so that the processing would be more efficient without losing its effectiveness.  In viewing the data, I noticed that several variables only recorded summary information.  Because these variables wouldn't be useful for building the model, I removed them from the dataset.  Doing this, along with removing header information (like *user_name*) reduced the number of variables to 53.
+
+Then, I noticed that records where the *new_window* variable was set to "yes" summarized the data from the other observations.  I decided to use these records for building the model, which reduced the number of records from 19,622 to 406.  Processing the data is as follows:
+
+```{r Initialize,echo=FALSE}
+	library(caret)
+	library(rpart)
+	train <- read.csv("pml-training.csv")
+	test <- read.csv("pml-testing.csv")
+	set.seed(1138)
+```
+
+```{r SelectVars,echo=FALSE}
+	useful <- c("roll_belt",
+		"pitch_belt",
+		"yaw_belt",
+		"total_accel_belt",
+		"gyros_belt_x",
+		"gyros_belt_y",
+		"gyros_belt_z",
+		"accel_belt_x",
+		"accel_belt_y",
+		"accel_belt_z",
+		"magnet_belt_x",
+		"magnet_belt_y",
+		"magnet_belt_z",
+		"roll_arm",
+		"pitch_arm",
+		"yaw_arm",
+		"total_accel_arm",
+		"gyros_arm_x",
+		"gyros_arm_y",
+		"gyros_arm_z",
+		"accel_arm_x",
+		"accel_arm_y",
+		"accel_arm_z",
+		"magnet_arm_x",
+		"magnet_arm_y",
+		"magnet_arm_z",
+		"roll_dumbbell",
+		"pitch_dumbbell",
+		"yaw_dumbbell",
+		"total_accel_dumbbell",
+		"gyros_dumbbell_x",
+		"gyros_dumbbell_y",
+		"gyros_dumbbell_z",
+		"accel_dumbbell_x",
+		"accel_dumbbell_y",
+		"accel_dumbbell_z",
+		"magnet_dumbbell_x",
+		"magnet_dumbbell_y",
+		"magnet_dumbbell_z",
+		"roll_forearm",
+		"pitch_forearm",
+		"yaw_forearm",
+		"total_accel_forearm",
+		"gyros_forearm_x",
+		"gyros_forearm_y",
+		"gyros_forearm_z",
+		"accel_forearm_x",
+		"accel_forearm_y",
+		"accel_forearm_z",
+		"magnet_forearm_x",
+		"magnet_forearm_y",
+		"magnet_forearm_z",
+		"classe")
+```
+
+``` {r CleanData}
+	trainClean <- train[,useful]
+	trainSummary <- trainClean[train$new_window=="yes",]
+```
+
+## Building the Model
+
+After reducing the dataset to just include variables that always had data (as opposed to variables that only had summarized data) and observations that only summarized data (using the *new_window* variable), I decided to use a random forest prediction model, since the desired prediction was a classification of five levels.
+
+For cross-validation, I created a training control variable that would create 10 iterations of the data, and then ran the *train* function using the random forest method.
+
+``` {r BuildModel,cache=TRUE}
+	tc <- trainControl("cv",10,savePred=T)
+	modFit <- train(classe~.,method="rf",data=trainSummary,trControl=tc)
+```
+
+The results of the model, including the accuracy, are as follows:
+
+``` {r ShowResults}
+    confusionMatrix(modFit)
+```
+
+## Explanation of Choices
+
+I contemplated a few different ways of building the model, including running pair plots for logical groupings of data (e.g. putting all "belt" variables together) but I was concerned about missing interactions between the different accelerometers.  Therefore, I started looking at ways to shrink the data set without losing valuable information.  I was going to perform a data transformation to get averages when I realized that the *new_window* flag was already doing that.  Upon seeing that, I immediately decided to only use records where this flag was true.  However, because summary values (such as max and min values) would not be available in the test set, I removed those from the model as I wouldn't be able to use them for testing purposes.
